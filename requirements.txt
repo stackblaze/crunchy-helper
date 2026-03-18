@@ -1,0 +1,4 @@
+# pg-db-manager — minimal dependencies for portability
+# Install: pip install -r requirements.txt  (or use a venv)
+
+PyYAML>=5.1
