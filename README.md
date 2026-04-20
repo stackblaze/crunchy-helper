@@ -37,7 +37,24 @@ Copy the project to another host (`scp -r pg-db-manager user@host:` or `tar -czf
 - `./manager.py delete [--db NAME] [--yes]` — Delete a database
 - `./manager.py restore [--backup LABEL] [--source-db NAME] [--as NAME] [--yes]` — Restore from pgBackRest
 - `./manager.py users list | create | delete | reset-password` — Manage users
+- `./manager.py primary [--show] [--to POD_OR_NODE] [--yes]` — Show topology / switch the Patroni leader
 
 ## Restore flow
 
-PVC per (database, backup date) → restore pod (pgbackrest from S3 to PVC) → extract pod (pg_dump to PVC) → copy dump to primary and pg_restore. The `pgbouncer` schema is excluded.
+PVC per (database, backup date) → restore pod (pgbackrest from S3 to PVC) → extract pod (pg_dump to PVC) → copy dump to primary and pg_restore. The `pgbouncer` schema is excluded for backwards compatibility with pre-removal dumps (harmless no-op on newer ones).
+
+## HA connection strings
+
+`create` and `list` emit URIs/JDBC carrying libpq HA flags (`target_session_attrs=read-write&connect_timeout=5&sslmode=require`). Point `PG_HOST` at a DNS name with A records for **all** K3S node IPs (Klipper ServiceLB exposes the `pg-<cluster>-ha` LoadBalancer on every node) and clients will skip dead/non-primary hosts and land on whichever pod Patroni currently leads. `pgbouncer-*` keys are no longer written into `*-pguser-*` secrets.
+
+## Primary management
+
+`./manager.py primary` prints the current Patroni topology and (optionally) switches the leader. It is the only command that does **not** require running on the current primary node — by design, since you usually want to move the leader off the host you are on.
+
+```bash
+./manager.py primary --show                       # just print topology
+./manager.py primary                              # interactive: pick by number
+./manager.py primary --to mia-pg-dallas --yes     # promote the pod on this node
+```
+
+Targets accept a list-number, a pod name, or a Kubernetes node name. Switchover runs `patronictl switchover --leader … --candidate … --force` inside the database container and verifies from a third pod (avoids the brief 502 window on the freshly promoted/demoted ones).
