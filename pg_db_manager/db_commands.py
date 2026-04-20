@@ -63,34 +63,38 @@ def cmd_list(cfg: dict, args):
     print(f"  User     : {db_owner}")
     print(f"  Password : {pw}")
     print()
-    print(f"  URL      : postgresql://{db_owner}:{pw}@{cfg['pg_host']}:{cfg['pg_port']}/{db_name}")
+    print(f"  URL      : postgresql://{db_owner}:{pw}@{cfg['pg_host']}:{cfg['pg_port']}/{db_name}?{HA_QS}")
     print()
     print(f"  JDBC     : jdbc:postgresql://{cfg['pg_host']}:{cfg['pg_port']}/{db_name}"
-          f"?user={db_owner}&password={pw}")
+          f"?user={db_owner}&password={pw}&targetServerType=primary&connectTimeout=5&sslmode=require")
     divider()
     print()
 
 
+HA_QS = "target_session_attrs=read-write&connect_timeout=5&sslmode=require"
+
+
 def write_pguser_secret(cfg: dict, db_name: str, db_user: str, db_pass: str):
-    """Write a pguser-compatible credential secret to Kubernetes."""
+    """Write a pguser-compatible credential secret to Kubernetes.
+
+    Connection strings include libpq HA flags so clients get auto-failover
+    over DNS round-robin to all K3S node IPs (pgBouncer was removed in favor
+    of the pg-<cluster>-ha LoadBalancer service exposed on every node).
+    """
     host = cfg["pg_host"]
     port = str(cfg["pg_port"])
-    pgbouncer_host = f"{cfg['cluster']}-pgbouncer.{cfg['namespace']}.svc"
     secret_name = f"{cfg['cluster']}-pguser-{db_user}"
     string_data = {
-        "host":              host,
-        "port":              port,
-        "dbname":            db_name,
-        "user":              db_user,
-        "password":          db_pass,
-        "uri":               f"postgresql://{db_user}:{db_pass}@{host}:{port}/{db_name}",
-        "jdbc-uri":          f"jdbc:postgresql://{host}:{port}/{db_name}?password={db_pass}&user={db_user}",
-        "pgpass":            f"{host}:{port}:{db_name}:{db_user}:{db_pass}",
-        "pgbouncer-host":    pgbouncer_host,
-        "pgbouncer-port":    port,
-        "pgbouncer-uri":     f"postgresql://{db_user}:{db_pass}@{pgbouncer_host}:{port}/{db_name}",
-        "pgbouncer-jdbc-uri": f"jdbc:postgresql://{pgbouncer_host}:{port}/{db_name}"
-                              f"?password={db_pass}&prepareThreshold=0&user={db_user}",
+        "host":     host,
+        "port":     port,
+        "dbname":   db_name,
+        "user":     db_user,
+        "password": db_pass,
+        "uri":      f"postgresql://{db_user}:{db_pass}@{host}:{port}/{db_name}?{HA_QS}",
+        "jdbc-uri": f"jdbc:postgresql://{host}:{port}/{db_name}"
+                    f"?user={db_user}&password={db_pass}"
+                    f"&targetServerType=primary&connectTimeout=5&sslmode=require",
+        "pgpass":   f"{host}:{port}:{db_name}:{db_user}:{db_pass}",
     }
     secret_manifest = {
         "apiVersion": "v1",
@@ -186,7 +190,7 @@ def cmd_create(cfg: dict, args):
     print(f"  Username  : {db_user}")
     print(f"  Password  : {db_pass}")
     print()
-    print(f"  postgresql://{db_user}:{db_pass}@{cfg['pg_host']}:{cfg['pg_port']}/{db_name}")
+    print(f"  postgresql://{db_user}:{db_pass}@{cfg['pg_host']}:{cfg['pg_port']}/{db_name}?{HA_QS}")
     divider()
     print()
 

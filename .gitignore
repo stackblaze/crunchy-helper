@@ -1,0 +1,9 @@
+# Local config — contains environment-specific paths and admin usernames
+pg-db-manager.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/

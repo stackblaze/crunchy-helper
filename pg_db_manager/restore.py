@@ -519,7 +519,9 @@ tail -f /dev/null
     if r.returncode != 0:
         die(f"Failed to copy dump to primary container: {r.stderr.decode().strip()}")
 
-    # Exclude pgbouncer schema: PGO creates it on every DB; dump from backup also has it → conflict
+    # Exclude pgbouncer schema for backwards compatibility: dumps taken before
+    # pgBouncer was removed from the PGO spec contain it. Harmless no-op on
+    # newer dumps. Safe to remove once no pre-removal backups remain.
     r = subprocess.run(
         ["sudo", "crictl", "exec", "-i", container_id,
          "pg_restore", "-U", "postgres", "-d", restored_db, "-v",

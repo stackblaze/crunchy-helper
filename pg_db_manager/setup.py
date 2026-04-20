@@ -189,6 +189,21 @@ def _detect_cluster_ip(namespace: str, cluster: str) -> str:
     return ip if ip and ip != "None" else ""
 
 
+def _detect_external_ips(namespace: str, cluster: str) -> list:
+    """Return external IPs of the HA service when type=LoadBalancer.
+
+    K3S Klipper ServiceLB exposes a LoadBalancer service on every node IP, so
+    this typically returns one entry per node. Empty list if service is not
+    LoadBalancer or no external IPs are assigned yet.
+    """
+    r = kube_module.kube("-n", namespace, "get", "svc", f"{cluster}-ha",
+                         "-o", "jsonpath={.status.loadBalancer.ingress[*].ip}")
+    raw = _decode(r.stdout).strip()
+    if not raw:
+        return []
+    return [ip for ip in raw.split() if ip]
+
+
 def _is_reachable(host: str, port: int = 5432, timeout: float = 2.0) -> bool:
     """Quick TCP check — True if host:port accepts a connection."""
     import socket
@@ -202,17 +217,34 @@ def _is_reachable(host: str, port: int = 5432, timeout: float = 2.0) -> bool:
 def _step4_pg_connection(namespace: str, cluster: str) -> tuple:
     print("  Step 4/4  PostgreSQL connection info")
     print()
-    cluster_ip = _detect_cluster_ip(namespace, cluster)
-    if cluster_ip and _is_reachable(cluster_ip):
-        ok(f"Cluster HA service reachable at {cluster_ip}:5432")
-        default_host = f"{cluster}-primary.{namespace}.svc.cluster.local"
-        pg_host_ip = cluster_ip
-    else:
-        print("  PG_HOST is the hostname or IP used to connect to PostgreSQL.")
-        print("  If running outside the cluster, enter an externally reachable address.")
-        print("  The in-cluster default only works from inside Kubernetes.")
-        default_host = f"{cluster}-primary.{namespace}.svc.cluster.local"
-        pg_host_ip = "127.0.0.1"
+    default_host = f"{cluster}-primary.{namespace}.svc.cluster.local"
+    pg_host_ip = ""
+
+    # Prefer LoadBalancer external IPs (HA path: any node IP works via Klipper ServiceLB).
+    external_ips = _detect_external_ips(namespace, cluster)
+    if external_ips:
+        ok(f"HA service is LoadBalancer with external IPs: {', '.join(external_ips)}")
+        reachable = next((ip for ip in external_ips if _is_reachable(ip)), "")
+        if reachable:
+            pg_host_ip = reachable
+            print(f"  Using {reachable} for PG_HOST_IP (any node IP would also work).")
+            print(f"  Recommended PG_HOST: a DNS name with A records for ALL node IPs")
+            print(f"  so libpq can fail over (e.g. pg-{cluster}.example.com).")
+        else:
+            warn("LoadBalancer IPs found but none reachable from this host.")
+            pg_host_ip = external_ips[0]
+
+    # Fall back to ClusterIP (in-cluster use only).
+    if not pg_host_ip:
+        cluster_ip = _detect_cluster_ip(namespace, cluster)
+        if cluster_ip and _is_reachable(cluster_ip):
+            ok(f"Cluster HA service reachable at {cluster_ip}:5432")
+            pg_host_ip = cluster_ip
+        else:
+            print("  PG_HOST is the hostname or IP used to connect to PostgreSQL.")
+            print("  If running outside the cluster, enter an externally reachable address.")
+            print("  The in-cluster default only works from inside Kubernetes.")
+            pg_host_ip = "127.0.0.1"
     print()
     users = _get_cluster_spec_users(namespace, cluster)
     default_admin = users[0] if users else cluster
