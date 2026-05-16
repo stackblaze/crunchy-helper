@@ -1,0 +1,107 @@
+/* pg-db-manager - Textual stylesheet.
+ *
+ * App-level rules only. Per-screen styling lives inside each Screen
+ * subclass's DEFAULT_CSS so the screens stay self-contained.
+ */
+
+/* ---- DataTable --------------------------------------------------------- */
+/* All list screens share the same look: bold header, accent cursor row,
+ * subtle hover, soft zebra stripes that don't fight the cursor color. */
+DataTable {
+    background: $surface;
+    color: $text;
+    border: round $primary-background-lighten-2;
+    padding: 0 1;
+    margin: 0 1;
+}
+DataTable > .datatable--header {
+    text-style: bold;
+    background: $primary 25%;
+    color: $text;
+}
+DataTable > .datatable--cursor {
+    background: $accent;
+    color: $text;
+    text-style: bold;
+}
+DataTable > .datatable--hover {
+    background: $primary 10%;
+}
+DataTable > .datatable--odd-row {
+    background: $surface-darken-1;
+}
+DataTable > .datatable--even-row {
+    background: $surface;
+}
+
+/* ---- Shared list-screen layout ---------------------------------------- */
+/* Used by every "table page": tiny title row, subtle hint row, the table,
+ * a status/keybindings footer line. Screens opt in by giving their root
+ * Vertical the .list-screen class.
+ *
+ * The container must explicitly claim the screen's available height so
+ * that its DataTable child's `height: 1fr` has space to flex into.
+ * Without this, Vertical shrink-wraps to its children's content and a
+ * small table (e.g. 2 databases) looks visibly shorter than a large one
+ * (e.g. 6 pods), which is the bug we're fixing. */
+.list-screen {
+    padding: 0;
+    height: 1fr;
+}
+.list-screen DataTable {
+    height: 1fr;
+}
+
+.list-title {
+    padding: 1 2 0 2;
+    text-style: bold;
+    color: $accent;
+}
+.list-hint {
+    padding: 0 2 1 2;
+    color: $text-muted;
+}
+.list-status {
+    padding: 0 2;
+    height: 1;
+    color: $text-muted;
+}
+.list-status.-ok    { color: $success; }
+.list-status.-warn  { color: $warning; }
+.list-status.-error { color: $error; text-style: bold; }
+
+.kbd {
+    background: $primary 30%;
+    color: $text;
+    text-style: bold;
+}
+
+/* ---- Focus + interaction polish --------------------------------------- */
+/* Buttons get a clearer "I'm focused" look so keyboard users don't lose
+ * their place when tabbing between controls. Inputs already have a strong
+ * focus border by default; we just nudge the disabled state to be more
+ * obviously inert. */
+Button:focus {
+    text-style: bold reverse;
+}
+Input:disabled {
+    opacity: 0.5;
+}
+Button:disabled {
+    opacity: 0.45;
+}
+
+/* ---- ProgressPanel + ResultModal scrolling --------------------------- */
+/* Long-running operations log a lot; let the body scroll with mouse
+ * wheel + arrow keys without stealing focus from the action buttons. */
+RichLog:focus {
+    border: tall $accent;
+}
+#result-body { overflow-y: auto; }
+
+/* ---- Tooltip-ish notifications ---------------------------------------- */
+/* Textual's Toast widget gets a slightly heavier border so warning /
+ * error notifications stand out from informational ones. */
+Toast.-error    { border: thick $error 60%; }
+Toast.-warning  { border: thick $warning 60%; }
+

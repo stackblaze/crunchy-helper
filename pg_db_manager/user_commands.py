@@ -119,10 +119,41 @@ def cmd_users(cfg: dict, args):
                 print("  Cancelled.\n")
                 return
 
-        run_sql_super(cfg, "postgres",
-            f'REASSIGN OWNED BY "{del_user}" TO postgres; '
-            f'DROP OWNED BY "{del_user}"; '
+        # REASSIGN OWNED / DROP OWNED only affect the *current* database, so
+        # we have to run them in every non-template DB or DROP USER fails
+        # with "role X cannot be dropped because some objects depend on it".
+        # We also check return codes so the result modal can't claim
+        # success when psql actually errored.
+        info(f"Reassigning + dropping owned objects across all databases...")
+        db_out, db_code = run_sql_super(cfg, "postgres",
+            "SELECT datname FROM pg_database "
+            "WHERE datistemplate = false AND datallowconn = true "
+            "ORDER BY datname;")
+        if db_code != 0:
+            die(f"Could not list databases:\n{db_out}")
+        all_dbs = [r.strip() for r in db_out.splitlines() if r.strip()]
+
+        problems: list[str] = []
+        for db in all_dbs:
+            out, code = run_sql_super(cfg, db,
+                f'REASSIGN OWNED BY "{del_user}" TO postgres; '
+                f'DROP OWNED BY "{del_user}";')
+            if code != 0:
+                problems.append(f"  [{db}] {out.strip()}")
+            else:
+                print(f"  [OK] cleared ownership/grants in '{db}'")
+
+        if problems:
+            die("Could not clear ownership/grants in every database:\n"
+                + "\n".join(problems))
+
+        info(f"Dropping role '{del_user}'...")
+        drop_out, drop_code = run_sql_super(cfg, "postgres",
             f'DROP USER "{del_user}";')
+        if drop_code != 0 or "ERROR" in drop_out.upper():
+            die(f"DROP USER failed:\n{drop_out}")
+
+        # Only remove the K8s secret if the role actually went away.
         kube("-n", cfg["namespace"], "delete", "secret",
              f"{cfg['cluster']}-pguser-{del_user}", "--ignore-not-found")
         ok(f"User '{del_user}' deleted.\n")

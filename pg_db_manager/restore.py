@@ -444,7 +444,11 @@ for i in $(seq 30); do
 done
 pg_isready -h /tmp -p 5433 -U postgres >/dev/null 2>&1 || {{ kill $PG_PID 2>/dev/null; cat /restore-data/postgres.log; exit 1; }}
 echo "Extracting with pg_dump..."
-pg_dump -h /tmp -p 5433 -U postgres -Fc -d "{src_db}" -f {dump_file_remote}
+# PG 16+ supports --exclude-schema in pg_dump; the pgbouncer schema is owned
+# by PGO and conflicts with the schema created on a fresh CREATE DATABASE
+# (template1 inherits it), so we strip it from the dump up front.
+pg_dump -h /tmp -p 5433 -U postgres -Fc --exclude-schema=pgbouncer \\
+  -d "{src_db}" -f {dump_file_remote}
 kill $PG_PID 2>/dev/null || true
 echo "Extraction complete!"
 tail -f /dev/null
@@ -466,21 +470,44 @@ tail -f /dev/null
             "volumes": [{"name": "restore-data", "persistentVolumeClaim": {"claimName": pvc_name}}],
         },
     }
-    r = kube("-n", ns, "apply", "-f", "-", input_data=yaml.dump(extract_pod).encode())
-    if r.returncode != 0:
-        die(f"Failed to create extract pod: {r.stderr.decode().strip()}")
+    # Idempotent extract-pod creation:
+    #   - If a previous run left the pod Running and "Extraction complete!" is
+    #     in the logs, reuse it (the dump file is on the PVC, ready for cp).
+    #   - Otherwise (Pending/Failed/Succeeded/missing required field), delete
+    #     and re-apply so we always exec against a clean pod.
+    r = kube("-n", ns, "get", "pod", extract_pod_name,
+             "-o", "jsonpath={.status.phase}")
+    pod_phase = (r.stdout or b"").decode().strip() if r.returncode == 0 else ""
+    reuse_pod = False
+    if pod_phase == "Running":
+        r_logs = kube("-n", ns, "logs", extract_pod_name, "--tail=20")
+        if "Extraction complete!" in (r_logs.stdout or b"").decode():
+            reuse_pod = True
+    if not reuse_pod and pod_phase:
+        info(f"Removing previous extract pod (phase={pod_phase})...")
+        kube("-n", ns, "delete", "pod", extract_pod_name,
+             "--wait=true", "--timeout=60s")
 
-    deadline = time.time() + 600
-    while time.time() < deadline:
-        time.sleep(5)
-        r = kube("-n", ns, "logs", extract_pod_name, "--tail=5")
-        logs = (r.stdout or b"").decode()
-        if "Extraction complete!" in logs:
-            ok("Database extraction completed")
-            break
+    if reuse_pod:
+        ok("Reusing existing extract pod (dump already produced)")
     else:
-        r2 = kube("-n", ns, "logs", extract_pod_name, "--tail=30")
-        die(f"Extract pod did not finish in time.\n\n{(r2.stdout or b'').decode()}")
+        r = kube("-n", ns, "apply", "-f", "-",
+                 input_data=yaml.dump(extract_pod).encode())
+        if r.returncode != 0:
+            die(f"Failed to create extract pod: {r.stderr.decode().strip()}")
+
+        deadline = time.time() + 600
+        while time.time() < deadline:
+            time.sleep(5)
+            r = kube("-n", ns, "logs", extract_pod_name, "--tail=5")
+            logs = (r.stdout or b"").decode()
+            if "Extraction complete!" in logs:
+                ok("Database extraction completed")
+                break
+        else:
+            r2 = kube("-n", ns, "logs", extract_pod_name, "--tail=30")
+            die(f"Extract pod did not finish in time.\n\n"
+                f"{(r2.stdout or b'').decode()}")
 
     info("[8/11] Copying dump to local...")
     r = subprocess.run(
@@ -509,6 +536,15 @@ tail -f /dev/null
         die(f"CREATE DATABASE failed: {create_out.strip()}")
     run_sql_super(cfg, "postgres", f'ALTER DATABASE "{safe_restored}" OWNER TO "{cfg["admin_user"]}";')
 
+    # The pgbouncer schema is created in template1 by PGO, so every fresh
+    # CREATE DATABASE inherits it. Without this, pg_restore aborts on
+    # "schema pgbouncer already exists" when restoring a pre-PGO-pgbouncer-
+    # removal dump. Drop it pre-emptively; harmless if absent.
+    drop_out, _ = run_sql_super(cfg, restored_db,
+        "DROP SCHEMA IF EXISTS pgbouncer CASCADE;")
+    if "error" in drop_out.lower() and "does not exist" not in drop_out.lower():
+        warn(f"Could not drop pgbouncer schema: {drop_out.strip()}")
+
     info("Copying dump to primary container...")
     with open(local_dump, "rb") as f:
         r = subprocess.run(
@@ -519,13 +555,14 @@ tail -f /dev/null
     if r.returncode != 0:
         die(f"Failed to copy dump to primary container: {r.stderr.decode().strip()}")
 
-    # Exclude pgbouncer schema for backwards compatibility: dumps taken before
-    # pgBouncer was removed from the PGO spec contain it. Harmless no-op on
-    # newer dumps. Safe to remove once no pre-removal backups remain.
+    # pg_restore in PG 16 doesn't support --exclude-schema (that's PG 17+);
+    # we handle the pgbouncer collision by stripping it from the dump
+    # (above, in pg_dump --exclude-schema) and dropping the schema on the
+    # target database before this call (above).
     r = subprocess.run(
         ["sudo", "crictl", "exec", "-i", container_id,
          "pg_restore", "-U", "postgres", "-d", restored_db, "-v",
-         "--exclude-schema=pgbouncer", "/tmp/restore.dump"],
+         "/tmp/restore.dump"],
         capture_output=True, text=True,
     )
     subprocess.run(["sudo", "crictl", "exec", "-i", container_id,

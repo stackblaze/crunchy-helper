@@ -2,3 +2,8 @@
 # Install: pip install -r requirements.txt  (or use a venv)
 
 PyYAML>=5.1
+# Interactive TUI built on Textual. 0.80 is roughly the cut-off where
+# DataTable / Worker semantics stabilised; pin a floor, not a ceiling, so
+# patch updates flow in. If textual isn't reachable via pip (offline /
+# air-gapped install), the CLI subcommands still work without it.
+textual>=0.80

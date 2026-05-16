@@ -10,6 +10,41 @@ from .kube import get_secret_password, kube, run_sql_direct, run_sql_super
 from .cluster import patch_spec_remove_db
 
 
+HA_QS = "target_session_attrs=read-write&connect_timeout=5&sslmode=require"
+
+
+def get_connection_info(cfg: dict, db_name: str, db_owner: str) -> dict:
+    """Return a structured connection-info record for ``db_name``.
+
+    Pure function (no I/O beyond reading the credential secret). Used by
+    both the CLI ``list`` command and the Textual connection-info modal so
+    the two surfaces never disagree on URL format.
+    """
+    pw = get_secret_password(cfg, f"{cfg['cluster']}-pguser-{db_owner}")
+    if not pw:
+        # Some PGO setups put the per-database secret under the database
+        # name (matching the convention used when the db and its owner
+        # share a name). Fall back to that before giving up.
+        alt = get_secret_password(cfg, f"{cfg['cluster']}-pguser-{db_name}")
+        if alt:
+            pw, db_owner = alt, db_name
+    pw = pw or "<password>"
+    host, port = cfg["pg_host"], cfg["pg_port"]
+    url = (f"postgresql://{db_owner}:{pw}@{host}:{port}/{db_name}?{HA_QS}")
+    jdbc = (f"jdbc:postgresql://{host}:{port}/{db_name}"
+            f"?user={db_owner}&password={pw}"
+            "&targetServerType=primary&connectTimeout=5&sslmode=require")
+    return {
+        "host":     host,
+        "port":     port,
+        "database": db_name,
+        "user":     db_owner,
+        "password": pw,
+        "url":      url,
+        "jdbc":     jdbc,
+    }
+
+
 def cmd_list(cfg: dict, args):
     print(f"\n  Databases on {cfg['pg_host']}:\n")
 
@@ -45,33 +80,23 @@ def cmd_list(cfg: dict, args):
         db_owner = next(
             (r.split("|")[1].strip() for r in rows if r.split("|")[0].strip() == sel), "")
 
-    pw = get_secret_password(cfg, f"{cfg['cluster']}-pguser-{db_owner}")
-    if not pw:
-        pw = get_secret_password(cfg, f"{cfg['cluster']}-pguser-{db_name}")
-        if pw:
-            db_owner = db_name
-    if not pw:
-        pw = "<password>"
+    info = get_connection_info(cfg, db_name, db_owner)
 
     print()
     divider()
-    print(f"  Connection Info  :  {db_name}")
+    print(f"  Connection Info  :  {info['database']}")
     divider()
-    print(f"  Host     : {cfg['pg_host']}")
-    print(f"  Port     : {cfg['pg_port']}")
-    print(f"  Database : {db_name}")
-    print(f"  User     : {db_owner}")
-    print(f"  Password : {pw}")
+    print(f"  Host     : {info['host']}")
+    print(f"  Port     : {info['port']}")
+    print(f"  Database : {info['database']}")
+    print(f"  User     : {info['user']}")
+    print(f"  Password : {info['password']}")
     print()
-    print(f"  URL      : postgresql://{db_owner}:{pw}@{cfg['pg_host']}:{cfg['pg_port']}/{db_name}?{HA_QS}")
+    print(f"  URL      : {info['url']}")
     print()
-    print(f"  JDBC     : jdbc:postgresql://{cfg['pg_host']}:{cfg['pg_port']}/{db_name}"
-          f"?user={db_owner}&password={pw}&targetServerType=primary&connectTimeout=5&sslmode=require")
+    print(f"  JDBC     : {info['jdbc']}")
     divider()
     print()
-
-
-HA_QS = "target_session_attrs=read-write&connect_timeout=5&sslmode=require"
 
 
 def write_pguser_secret(cfg: dict, db_name: str, db_user: str, db_pass: str):

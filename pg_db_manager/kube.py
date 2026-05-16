@@ -68,6 +68,33 @@ def run_sql_super(cfg: dict, db: str, sql: str) -> tuple:
     return (r.stdout + r.stderr).strip(), r.returncode
 
 
+def run_sql_super_kubectl(cfg: dict, db: str, sql: str,
+                          *, timeout: int = 30) -> tuple:
+    """Run SQL as the ``postgres`` superuser via ``kubectl exec``.
+
+    Equivalent to ``run_sql_super`` but works from any workstation with a
+    KUBECONFIG -- no need to be on the primary node and no ``crictl``
+    requirement. Inside the database container ``psql -U postgres`` uses
+    local peer auth on the Unix socket, so we don't pass a password.
+
+    Used by the Textual TUI's read-only data fetchers; the CLI keeps the
+    crictl path because it's the same path the destructive operations
+    (create/drop) use and we want a single peer-auth route there.
+    """
+    r = kube("-n", cfg["namespace"], "get", "pod",
+             "-l", "postgres-operator.crunchydata.com/role=master",
+             "-o", "jsonpath={.items[0].metadata.name}")
+    pod = r.stdout.decode().strip()
+    if not pod:
+        return ("Could not find primary pod.", 1)
+    p = subprocess.run(
+        ["kubectl", "-n", cfg["namespace"], "exec", pod, "-c", "database",
+         "--", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c", sql],
+        capture_output=True, text=True, timeout=timeout,
+    )
+    return (p.stdout + p.stderr).strip(), p.returncode
+
+
 def run_sql_direct(cfg: dict, user: str, password: str, db: str, sql: str) -> tuple:
     """Run SQL as a specific user via direct TCP to pg_host_ip:pg_port (SCRAM + SSL)."""
     env = {**os.environ, "PGPASSWORD": password, "PGSSLMODE": "prefer"}
@@ -148,7 +175,15 @@ def check_primary_node(cfg: dict):
         )
 
 
-def preflight(cfg: dict):
+def preflight(cfg: dict, *, require_primary_node: bool = True):
+    """Verify kubectl reachability and (optionally) primary-node access.
+
+    The interactive Textual app calls this with require_primary_node=False
+    so the menu is usable from a workstation that doesn't have crictl on
+    the local box. Operations that actually require primary-node access
+    (restore, switchover) re-check via check_primary_node() right before
+    they touch the primary container.
+    """
     r = kube("get", "namespace", cfg["namespace"], "-o", "name")
     if r.returncode != 0:
         details = (r.stderr or b"").decode().strip()
@@ -157,7 +192,8 @@ def preflight(cfg: dict):
             f"kubectl cannot reach the cluster.\n  Details: {details}\n\n"
             f"  KUBECONFIG: {kubeconfig}"
         )
-    check_primary_node(cfg)
+    if require_primary_node:
+        check_primary_node(cfg)
 
 
 def reset_container_id_cache():
