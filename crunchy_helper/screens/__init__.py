@@ -1,4 +1,4 @@
-"""Textual screens for pg-db-manager.
+"""Textual screens for crunchy-helper.
 
 Each module exports exactly one Screen subclass. Cross-screen navigation
 goes through ``app.push_screen()`` / ``app.pop_screen()`` rather than

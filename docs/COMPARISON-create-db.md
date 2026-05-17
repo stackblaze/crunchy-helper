@@ -10,7 +10,7 @@
 | **Existence check** | DB: from cluster spec (`.spec.users[].databases`). User: from `.spec.users[].name`; if user exists, append random suffix. | DB: `SELECT` in Postgres. No check for existing username in spec (can conflict if user already in spec). |
 | **Wait** | Primary pod → poll `pg_database` until DB exists (max 120s) → sleep 5 → get secret (wait up to 30s). | Wait for secret `.data.verifier` (PGO reconciliation), up to ~2 min. |
 | **Grants / ownership** | Full: `GRANT ALL ON SCHEMA public`; `GRANT ALL PRIVILEGES ON DATABASE`; `ALTER SCHEMA public OWNER TO user`; `ALTER DATABASE OWNER TO user`; `ALTER DEFAULT PRIVILEGES` (tables, sequences). | Only: `GRANT ALL PRIVILEGES ON DATABASE`; `ALTER DATABASE OWNER`. *(Manager was missing schema and default privileges; now aligned—see below.)* |
-| **Config** | Hardcoded defaults (NAMESPACE, CLUSTER, EXTERNAL_HOST). | From `pg-db-manager.env` (portable, per cluster). |
+| **Config** | Hardcoded defaults (NAMESPACE, CLUSTER, EXTERNAL_HOST). | From `crunchy-helper.env` (portable, per cluster). |
 | **Dependencies** | bash, kubectl, jq, openssl. | Python 3, PyYAML, kubectl. |
 
 ## Alignments made in manager

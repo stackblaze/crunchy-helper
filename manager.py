@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""pg-db-manager — Manage databases on a Crunchy PGO PostgreSQL cluster.
+"""crunchy-helper — Manage databases on a Crunchy PGO PostgreSQL cluster.
+
+A community-built CLI/TUI. Not affiliated with Crunchy Data.
 
 Usage:
   ./manager.py                                        # interactive Textual TUI
@@ -17,7 +19,7 @@ Usage:
 Running with no arguments launches the interactive TUI. Subcommands keep
 their plain-stdout behaviour so they're safe in scripts and cron jobs.
 
-If pg-db-manager.env is missing, setup runs automatically.
+If crunchy-helper.env is missing, setup runs automatically.
 """
 
 import argparse
@@ -130,7 +132,7 @@ def _ensure_python_deps():
 _ensure_system_deps()
 _ensure_python_deps()
 
-from pg_db_manager import (
+from crunchy_helper import (
     ensure_configured,
     get_config,
     preflight,
@@ -145,7 +147,7 @@ from pg_db_manager import (
 
 def _launch_tui(cfg) -> int:
     """Start the Textual app. Returns the app's exit code (0 = clean exit)."""
-    from pg_db_manager.textual_app import run_app
+    from crunchy_helper.textual_app import run_app
     return run_app(cfg)
 
 
@@ -227,8 +229,9 @@ def _build_parser() -> argparse.ArgumentParser:
     the config / preflight chain (which would block on a setup prompt
     on a fresh box)."""
     parser = argparse.ArgumentParser(
-        prog="pg-db-manager",
-        description="Manage databases on a Crunchy PGO PostgreSQL cluster.",
+        prog="crunchy-helper",
+        description="Manage databases on a Crunchy PGO PostgreSQL cluster.\n"
+                    "A community-built tool. Not affiliated with Crunchy Data.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Run with no arguments to launch the interactive TUI.\n"
                "If not configured, setup runs automatically on first run.",
@@ -286,8 +289,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_install = sub.add_parser(
         "install",
         help="Symlink this script into a PATH dir (no more './manager.py')")
-    p_install.add_argument("--name",   default="pg-db-manager",
-        help="Command name to install (default: pg-db-manager)")
+    p_install.add_argument("--name",   default="crunchy-helper",
+        help="Command name to install (default: crunchy-helper)")
     p_install.add_argument("--prefix", default="/usr/local/bin",
         help="Directory to install into (default: /usr/local/bin)")
     p_install.add_argument("--user",   action="store_true",
@@ -312,7 +315,7 @@ def _handle_install(argv: list) -> int:
     p = argparse.ArgumentParser(
         prog="manager.py install",
         description="Symlink this script into a PATH dir.")
-    p.add_argument("--name",   default="pg-db-manager")
+    p.add_argument("--name",   default="crunchy-helper")
     p.add_argument("--prefix", default="/usr/local/bin")
     p.add_argument("--user",   action="store_true")
     p.add_argument("--force",  action="store_true")
@@ -325,7 +328,7 @@ def main():
     # `install` and bare `--help` have to work on a freshly-cloned checkout
     # that has no env file or kubeconfig yet, so we short-circuit them
     # before the config / preflight chain that every other path runs
-    # through. Otherwise `pg-db-manager --help` would block on the
+    # through. Otherwise `crunchy-helper --help` would block on the
     # interactive setup prompt.
     if len(sys.argv) >= 2 and sys.argv[1] == "install":
         sys.exit(_handle_install(sys.argv[2:]))

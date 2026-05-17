@@ -1,4 +1,4 @@
-"""Textual-based interactive UI for pg-db-manager.
+"""Textual-based interactive UI for crunchy-helper.
 
 This is the entry point that `manager.py` calls when invoked with no
 arguments. The CLI subcommands (`manager.py list`, `manager.py restore ...`)
@@ -9,16 +9,12 @@ Architecture
 ------------
 - ``run_app(cfg)`` is the only public entry point. It constructs the
   ``ManagerApp`` with the loaded config and runs it.
-- Screens live under ``pg_db_manager.screens.*``. Each screen owns its own
+- Screens live under ``crunchy_helper.screens.*``. Each screen owns its own
   layout + key bindings. Cross-screen navigation goes via ``app.push_screen``
   / ``app.pop_screen``.
 - Long-running ops (restore phases, switchover, etc.) run in worker threads
   via Textual's ``@work(thread=True)`` so the UI stays responsive. They
   communicate progress back via custom messages.
-
-The current scaffold (M0) is intentionally tiny: it just shows the cluster
-name + a "WIP" hint so we can verify the bootstrap and screen routing wire
-end-to-end before we start building real screens.
 """
 
 from __future__ import annotations
@@ -33,7 +29,7 @@ class ManagerApp(App):
     """Top-level Textual app. Holds the cfg dict and delegates to screens."""
 
     CSS_PATH = "textual_app.tcss"
-    TITLE = "pg-db-manager"
+    TITLE = "crunchy-helper"
     SUB_TITLE = ""
     BINDINGS = [
         Binding("q",             "request_quit", "Quit",       priority=True),

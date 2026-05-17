@@ -1,4 +1,4 @@
-"""Reusable Textual widgets for pg-db-manager."""
+"""Reusable Textual widgets for crunchy-helper."""
 
 from .progress_panel import ProgressPanel, TextualProgressReporter
 

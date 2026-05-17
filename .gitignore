@@ -1,4 +1,5 @@
 # Local config — contains environment-specific paths and admin usernames
+crunchy-helper.env
 pg-db-manager.env
 
 # Python

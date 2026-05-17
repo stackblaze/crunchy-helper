@@ -1,4 +1,4 @@
-"""Configuration and output helpers for pg-db-manager."""
+"""Configuration and output helpers for crunchy-helper."""
 
 import getpass
 import os
@@ -6,19 +6,29 @@ import re
 import sys
 from pathlib import Path
 
-# Project root (parent of this package) for pg-db-manager.env and YAML paths
+# Project root (parent of this package) for crunchy-helper.env and YAML paths
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 DIVIDER = "═" * 48
 
 
 def load_env():
-    """Source pg-db-manager.env into os.environ (handles `export KEY=VALUE`).
-    Paths in .env can use ${SCRIPT_DIR}; relative KUBECONFIG/YAML are resolved from project root for portability.
+    """Source crunchy-helper.env into os.environ (handles `export KEY=VALUE`).
+    Paths in .env can use ${SCRIPT_DIR}; relative KUBECONFIG/YAML are resolved
+    from project root for portability.
+
+    Backwards-compatible: ``PG_DB_MANAGER_ENV`` and ``pg-db-manager.env`` are
+    still honoured so existing installs keep working after the rename.
     """
-    env_var = os.environ.get("PG_DB_MANAGER_ENV")
+    env_var = (os.environ.get("CRUNCHY_HELPER_ENV")
+               or os.environ.get("PG_DB_MANAGER_ENV"))
     candidates = (
         [Path(env_var)] if env_var
-        else [SCRIPT_DIR / "pg-db-manager.env", Path.home() / ".pg-db-manager.env"]
+        else [SCRIPT_DIR / "crunchy-helper.env",
+              Path.home() / ".crunchy-helper.env",
+              # Legacy locations from when the tool was called pg-db-manager;
+              # picked up after the new names so a fresh setup wins.
+              SCRIPT_DIR / "pg-db-manager.env",
+              Path.home() / ".pg-db-manager.env"]
     )
     for path in candidates:
         if path.exists():

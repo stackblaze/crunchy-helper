@@ -1,4 +1,4 @@
-/* pg-db-manager - Textual stylesheet.
+/* crunchy-helper - Textual stylesheet.
  *
  * App-level rules only. Per-screen styling lives inside each Screen
  * subclass's DEFAULT_CSS so the screens stay self-contained.

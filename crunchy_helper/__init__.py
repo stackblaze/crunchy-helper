@@ -1,4 +1,4 @@
-"""pg-db-manager package: config, kube, cluster, setup, and command modules."""
+"""crunchy-helper package: config, kube, cluster, setup, and command modules."""
 
 from .config import get_config, load_env
 from .kube import preflight
