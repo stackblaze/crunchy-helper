@@ -1,21 +1,36 @@
-# pg-db-manager
+# crunchy-helper
 
-Manage databases on a **Crunchy PGO** PostgreSQL cluster: list, create,
-delete, restore from pgBackRest, manage users, and switch the Patroni
-primary — from either an interactive terminal UI or a scriptable CLI.
+A community-built CLI/TUI for managing databases on a **Crunchy PGO**
+PostgreSQL cluster: list, create, delete, restore from pgBackRest,
+manage users, and switch the Patroni primary — from either an
+interactive terminal UI or a scriptable command line.
 
-**[github.com/stackblaze/pg-db-manager](https://github.com/stackblaze/pg-db-manager)**
+> **Not affiliated with [Crunchy Data](https://www.crunchydata.com/).**
+> This is an unofficial third-party tool built on top of their excellent
+> open-source [Postgres Operator (PGO)](https://github.com/CrunchyData/postgres-operator).
+
+**[github.com/stackblaze/crunchy-helper](https://github.com/stackblaze/crunchy-helper)**
+
+<p align="center">
+  <img src="docs/screenshots/main-menu.png"
+       alt="crunchy-helper main menu"
+       width="46%">
+  &nbsp;
+  <img src="docs/screenshots/primary-topology.png"
+       alt="crunchy-helper Patroni topology view"
+       width="46%">
+</p>
 
 ## Prerequisites
 
-Python 3.7+, `kubectl` in PATH (pointing at the cluster that runs PGO),
-and `psql` (auto-installed on Debian/Ubuntu by the bootstrap).
+Python 3.7+, `kubectl` in `PATH` (pointing at the cluster that runs
+PGO), and `psql` (auto-installed on Debian/Ubuntu by the bootstrap).
 
 ## Quick start
 
 ```bash
-git clone https://github.com/stackblaze/pg-db-manager.git
-cd pg-db-manager
+git clone https://github.com/stackblaze/crunchy-helper.git
+cd crunchy-helper
 pip install -r requirements.txt
 
 ./manager.py             # interactive TUI (recommended)
@@ -23,16 +38,16 @@ pip install -r requirements.txt
 ./manager.py users list
 ```
 
-Setup explicitly: `python -m pg_db_manager.setup`
+Setup explicitly: `python -m crunchy_helper.setup`
 
 ### Install on `$PATH` (optional)
 
-So you can type `pg-db-manager` from anywhere instead of `./manager.py`:
+So you can type `crunchy-helper` from anywhere instead of `./manager.py`:
 
 ```bash
-sudo ./manager.py install              # /usr/local/bin/pg-db-manager
-./manager.py install --user            # ~/.local/bin/pg-db-manager (no sudo)
-./manager.py install --name pgm        # custom command name
+sudo ./manager.py install              # /usr/local/bin/crunchy-helper
+./manager.py install --user            # ~/.local/bin/crunchy-helper (no sudo)
+./manager.py install --name ch         # custom command name
 ./manager.py install --force           # overwrite an existing symlink
 ```
 
@@ -45,8 +60,9 @@ prints the exact `export PATH=...` line to add to your shell rc.
 
 ### Interactive TUI (no arguments)
 
-Running `./manager.py` with no arguments launches a [Textual](
-https://textual.textualize.io/)-based terminal UI:
+Running `./manager.py` (or `crunchy-helper` once installed) with no
+arguments launches a [Textual](https://textual.textualize.io/)-based
+terminal UI:
 
 - **Main menu** with quick access to Databases, Users, Primary, and Restore.
 - **Tables with live counts**, owner / role colouring, and row-level
@@ -77,27 +93,30 @@ use in cron jobs, CI, and shell scripts:
 
 | Command | Description |
 | --- | --- |
-| `./manager.py list [--db NAME]` | List DBs; optional connection info for one |
-| `./manager.py create [--db NAME] [--user USER] [--password PASS]` | Create DB + user |
-| `./manager.py delete [--db NAME] [--yes]` | Delete a database |
-| `./manager.py restore [--backup LABEL] [--source-db NAME] [--as NAME] [--yes]` | Restore from pgBackRest |
-| `./manager.py users {list \| create \| delete \| reset-password}` | Manage users |
-| `./manager.py primary [--show] [--to POD_OR_NODE] [--yes]` | Show Patroni topology / switch the leader |
+| `crunchy-helper list [--db NAME]` | List DBs; optional connection info for one |
+| `crunchy-helper create [--db NAME] [--user USER] [--password PASS]` | Create DB + user |
+| `crunchy-helper delete [--db NAME] [--yes]` | Delete a database |
+| `crunchy-helper restore [--backup LABEL] [--source-db NAME] [--as NAME] [--yes]` | Restore from pgBackRest |
+| `crunchy-helper users {list \| create \| delete \| reset-password}` | Manage users |
+| `crunchy-helper primary [--show] [--to POD_OR_NODE] [--yes]` | Show Patroni topology / switch the leader |
+| `crunchy-helper install [--user] [--name CMD] [--prefix DIR] [--force]` | Symlink the script into a `$PATH` dir |
 
 ## Portable use
 
-Copy the project to another host (`scp -r pg-db-manager user@host:` or
-`tar -czf pg-db-manager.tar.gz pg-db-manager`). On the new machine,
+Copy the project to another host (`scp -r crunchy-helper user@host:` or
+`tar -czf crunchy-helper.tar.gz crunchy-helper`). On the new machine,
 extract, run `pip install -r requirements.txt`, then run
 `./manager.py` — setup will prompt for that cluster's kubeconfig / API.
-Use separate copies or `PG_DB_MANAGER_ENV` for multiple clusters.
+Use separate copies or `CRUNCHY_HELPER_ENV` for multiple clusters.
 
 ## Config
 
-- **pg-db-manager.env** — Generated by setup; holds `KUBECONFIG`,
+- **crunchy-helper.env** — Generated by setup; holds `KUBECONFIG`,
   `PG_HOST`, `NAMESPACE`, `CLUSTER`. Editable; `${SCRIPT_DIR}` works
   when the folder is copied.
-- **PG_DB_MANAGER_ENV** — Optional; point to another env file.
+- **CRUNCHY_HELPER_ENV** — Optional; point to another env file.
+- Legacy `pg-db-manager.env` and `PG_DB_MANAGER_ENV` are still honoured
+  so existing installs keep working through the rename.
 
 ## Restore flow
 
@@ -133,9 +152,9 @@ you switch the leader (`s` on the selected pod). The same workflow is
 available from the CLI:
 
 ```bash
-./manager.py primary --show                       # just print topology
-./manager.py primary                              # interactive: pick by number
-./manager.py primary --to mia-pg-dallas --yes     # promote pod/node, no prompt
+crunchy-helper primary --show                       # just print topology
+crunchy-helper primary                              # interactive: pick by number
+crunchy-helper primary --to mia-pg-dallas --yes     # promote pod/node, no prompt
 ```
 
 `--to` accepts a list-number, a pod name, or a Kubernetes node name.
@@ -149,38 +168,38 @@ current primary node, by design (you usually want to move the leader
 ## Architecture
 
 ```
-manager.py                 # entry point, argparse + TUI launch
-pg_db_manager/
-  config.py / setup.py     # env file + first-run setup
-  kube.py                  # kubectl + crictl helpers
-  cluster.py / data.py     # pure data fetchers
-  db_commands.py           # CLI: list/create/delete
-  user_commands.py         # CLI: users list/create/delete/reset-password
-  primary_commands.py      # CLI: primary topology / switchover
-  restore.py               # CLI: restore from pgBackRest
-  textual_app.py + .tcss   # Textual app shell + global stylesheet
-  operations/              # pure functions used by the TUI
-    progress.py            #   ProgressReporter protocol + OperationResult
+manager.py                    # entry point, argparse + TUI launch
+crunchy_helper/
+  config.py / setup.py        # env file + first-run setup
+  kube.py                     # kubectl + crictl helpers
+  cluster.py / data.py        # pure data fetchers
+  db_commands.py              # CLI: list/create/delete
+  user_commands.py            # CLI: users list/create/delete/reset-password
+  primary_commands.py         # CLI: primary topology / switchover
+  restore.py                  # CLI: restore from pgBackRest
+  textual_app.py + .tcss      # Textual app shell + global stylesheet
+  operations/                 # pure functions used by the TUI
+    progress.py               #   ProgressReporter protocol + OperationResult
     switchover.py / restore.py
   widgets/
-    progress_panel.py      # streaming-log + progress-bar widget
+    progress_panel.py         # streaming-log + progress-bar widget
   screens/
     main_menu.py
     databases.py / db_create.py / db_info.py
     users.py / user_actions.py
     primary.py / switchover.py
-    restore.py             # 4-screen restore flow
-    _dialogs.py            # ResultModal, ConfirmModal, HelpModal, ErrorModal
-    _runner.py / _table.py # in-process command runner + table cell helpers
+    restore.py                # 4-screen restore flow
+    _dialogs.py               # ResultModal, ConfirmModal, HelpModal, ErrorModal
+    _runner.py / _table.py    # in-process command runner + table cell helpers
 ```
 
-The CLI subcommands and the TUI share the same kube/data/operations
+The CLI subcommands and the TUI share the same kube / data / operations
 layers, so behaviour stays consistent across both surfaces.
 
 ## Development
 
-Headless smoke tests live under `/tmp/m{1..5}_test.py` (one per migration
-milestone). Run them with:
+Headless smoke tests live under `/tmp/m{1..5}_test.py` (one per
+migration milestone). Run them with:
 
 ```bash
 for n in 1 2 3 4 5; do
@@ -190,3 +209,18 @@ done
 
 Each script drives the Textual app via `App.run_test()` so they run
 without a TTY and exit non-zero on regression.
+
+## Acknowledgements
+
+Built on the foundations laid by the
+[Crunchy Data Postgres Operator (PGO)](https://github.com/CrunchyData/postgres-operator),
+[Patroni](https://github.com/zalando/patroni),
+[pgBackRest](https://pgbackrest.org/), and
+[Textual](https://textual.textualize.io/).
+This project is an independent operator-experience layer on top of those
+tools — all credit for the underlying clustering / backup / restore
+machinery belongs to their respective authors.
+
+## Licence
+
+(see project metadata)
