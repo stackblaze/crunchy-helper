@@ -10,6 +10,8 @@ interactive terminal UI or a scriptable command line.
 > open-source [Postgres Operator (PGO)](https://github.com/CrunchyData/postgres-operator).
 
 **[github.com/stackblaze/crunchy-helper](https://github.com/stackblaze/crunchy-helper)**
+&nbsp;·&nbsp;
+[![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 <p align="center">
   <img src="docs/screenshots/main-menu.png"
@@ -223,4 +225,5 @@ machinery belongs to their respective authors.
 
 ## Licence
 
-(see project metadata)
+[MIT](LICENSE) — free to use, modify, and redistribute, with attribution.
+No warranty; you run it on your cluster, you own the consequences.
